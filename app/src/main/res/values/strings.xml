@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">SignalTracker</string>
+    <string name="notification_title">SignalTracker</string>
+    <string name="notification_message">Tracking is running in the background</string>
+</resources>
