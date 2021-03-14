@@ -122,7 +122,7 @@ public class MainActivity extends AppCompatActivity {
         // background permissions can be requested (API 30+)
         if (!permissionBackgroundLocation) {
             ActivityCompat.requestPermissions(this,
-                    new String[] { Manifest.permission.ACCESS_BACKGROUND_LOCATION },
+                    new String[]{Manifest.permission.ACCESS_BACKGROUND_LOCATION},
                     REQUEST_CODE_BACKGROUND_LOCATION);
         }
     }
@@ -140,12 +140,16 @@ public class MainActivity extends AppCompatActivity {
         }
 
         if (requestCode == REQUEST_CODE_BACKGROUND_LOCATION) {
-            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
                 permissionBackgroundLocation = true;
             } else {
-                Toast.makeText(this,
-                        "Signal Tracker service cannot start without background location permissions",
-                        Toast.LENGTH_LONG);
+                if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                    permissionBackgroundLocation = true;
+                } else {
+                    Toast.makeText(this,
+                            "Signal Tracker service cannot start without background location permissions",
+                            Toast.LENGTH_LONG).show();
+                }
             }
         }
 

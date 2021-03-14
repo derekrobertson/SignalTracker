@@ -1,6 +1,6 @@
 package com.b183237x.signaltracker;
 
-import android.Manifest;
+import android.annotation.SuppressLint;
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
@@ -12,18 +12,19 @@ import android.os.Build;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.PowerManager;
+import android.telephony.*;
 import android.util.Log;
 import android.content.Context;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.core.app.NotificationCompat;
 import java.util.Calendar;
+import java.util.List;
 import android.os.Bundle;
 import android.location.LocationListener;
-import android.location.Location;
 import android.location.LocationManager;
 import android.location.Criteria;
-
+import android.telephony.TelephonyManager;
 
 
 public class TrackerService extends Service {
@@ -32,8 +33,8 @@ public class TrackerService extends Service {
     public static final String CHANNEL_NAME = "Signal Tracker Service Channel";
     private PowerManager.WakeLock wakeLock = null;
     private boolean isServiceStarted = false;
-    private LocationListener listener;
-    private LocationManager locManager;
+    private LocationListener locationListener;
+    private LocationManager locationManager;
     private static Location lastLocation = null;
 
 
@@ -50,7 +51,7 @@ public class TrackerService extends Service {
         super.onCreate();
 
         // Create a new Location listener for GPS location updates
-        listener = new LocationListener() {
+        locationListener = new LocationListener() {
             @Override
             public void onLocationChanged(@NonNull Location location) {
                 lastLocation = location;
@@ -68,11 +69,11 @@ public class TrackerService extends Service {
             public void onStatusChanged(String arg0, int arg1, Bundle bundle) {}
         };
 
-        locManager = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
-        String provider = locManager.getBestProvider(new Criteria(), true);
+        locationManager = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
+        String provider = locationManager.getBestProvider(new Criteria(), true);
         if (provider != null) {
             try {
-                locManager.requestLocationUpdates(provider, 10000, 1, listener);
+                locationManager.requestLocationUpdates(provider, 10000, 1, locationListener);
             }
             catch (SecurityException e) {
                 // permission not enabled!
@@ -80,6 +81,7 @@ public class TrackerService extends Service {
             }
         }
 
+        // Create notification and start foreground service
         Notification notification = createNotification();
         startForeground(1, notification);
     }
@@ -118,11 +120,11 @@ public class TrackerService extends Service {
         super.onDestroy();
 
         // Destroy the location listener
-        if (locManager != null && listener != null) {
-                locManager.removeUpdates(listener);
+        if (locationManager != null && locationListener != null) {
+                locationManager.removeUpdates(locationListener);
         }
-        locManager = null;
-        listener = null;
+        locationListener = null;
+        locationManager = null;
     }
 
 
@@ -158,12 +160,48 @@ public class TrackerService extends Service {
             @Override
             public void run() {
                 Log.i("Logger", "Logged at:" + Calendar.getInstance().getTime());
-
+                getSignalStrength();
                 handler.postDelayed(this, 2000);
             }
         };
         handler.postDelayed(runner, 2000);
     }
+
+    private void getSignalStrength() {
+        // Function uses TelephonyManager to get the current network type (2g, 3g, 4g) and the
+        // relative signal strength to the Cell tower that we are currently connected to.
+        // NOTE: Can only ever be connected to a single cell tower and single gen of network
+        String strength_2g = "";
+        String strength_3g = "";
+        String strength_4g = "";
+
+        TelephonyManager telephonyManager = (TelephonyManager) getSystemService(TELEPHONY_SERVICE);
+        @SuppressLint("MissingPermission") List<CellInfo> cellInfoList = telephonyManager.getAllCellInfo();
+        if (cellInfoList != null) {
+            for (CellInfo cellInfo: cellInfoList) {
+                if (cellInfo.isRegistered()) {
+                    if (cellInfo instanceof CellInfoGsm) {
+                        CellInfoGsm cellInfoGsm = (CellInfoGsm) cellInfo;
+                        CellSignalStrengthGsm cellSignalStrengthGsm = cellInfoGsm.getCellSignalStrength();
+                        strength_2g = String.valueOf(cellSignalStrengthGsm.getAsuLevel());
+                    }
+                    if (cellInfo instanceof CellInfoWcdma) {
+                        CellInfoWcdma cellInfoWcdma = (CellInfoWcdma) cellInfo;
+                        CellSignalStrengthWcdma cellSignalStrengthWcdma = cellInfoWcdma.getCellSignalStrength();
+                        strength_3g = String.valueOf(cellSignalStrengthWcdma.getAsuLevel());
+                    }
+                    if (cellInfo instanceof CellInfoLte) {
+                        CellInfoLte cellInfoLte = (CellInfoLte) cellInfo;
+                        CellSignalStrengthLte cellSignalStrengthLte = cellInfoLte.getCellSignalStrength();
+                        strength_4g = String.valueOf(cellSignalStrengthLte.getAsuLevel());
+                    }
+                    Log.i("Signal Strength", "2g=" + strength_2g + "  3g=" + strength_3g
+                                + "  4g=" + strength_4g);
+                }
+            }
+        }
+    }
+
 
 
     private void stopService() {
