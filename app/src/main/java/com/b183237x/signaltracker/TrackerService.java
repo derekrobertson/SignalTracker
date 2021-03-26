@@ -6,7 +6,10 @@ import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.Service;
+import android.content.ContentValues;
 import android.content.Intent;
+import android.database.sqlite.SQLiteDatabase;
+import android.database.sqlite.SQLiteException;
 import android.location.Location;
 import android.os.Build;
 import android.os.Handler;
@@ -25,6 +28,7 @@ import android.location.LocationListener;
 import android.location.LocationManager;
 import android.location.Criteria;
 import android.telephony.TelephonyManager;
+import android.widget.Toast;
 
 
 public class TrackerService extends Service {
@@ -33,9 +37,13 @@ public class TrackerService extends Service {
     public static final String CHANNEL_NAME = "Signal Tracker Service Channel";
     private PowerManager.WakeLock wakeLock = null;
     private boolean isServiceStarted = false;
+
     private LocationListener locationListener;
     private LocationManager locationManager;
     private static Location lastLocation = null;
+
+    private SignalTrackerDatabaseHelper signalTrackerDatabaseHelper;
+    private SQLiteDatabase db;
 
 
     @Nullable
@@ -49,6 +57,17 @@ public class TrackerService extends Service {
     @Override
     public void onCreate() {
         super.onCreate();
+
+        // Get a handle to the SQL db
+        signalTrackerDatabaseHelper = new SignalTrackerDatabaseHelper(this);
+        try {
+            db = signalTrackerDatabaseHelper.getWritableDatabase();
+        } catch (SQLiteException e) {
+            Toast toast = Toast.makeText(this, "Unable to access database",
+                    Toast.LENGTH_SHORT);
+            toast.show();
+            return;
+        }
 
         // Create a new Location listener for GPS location updates
         locationListener = new LocationListener() {
@@ -77,7 +96,10 @@ public class TrackerService extends Service {
             }
             catch (SecurityException e) {
                 // permission not enabled!
-
+                Toast toast = Toast.makeText(this, "Unable to access location",
+                        Toast.LENGTH_SHORT);
+                toast.show();
+                return;
             }
         }
 
@@ -125,6 +147,8 @@ public class TrackerService extends Service {
         }
         locationListener = null;
         locationManager = null;
+
+        db.close();
     }
 
 
@@ -194,6 +218,7 @@ public class TrackerService extends Service {
                         CellInfoLte cellInfoLte = (CellInfoLte) cellInfo;
                         CellSignalStrengthLte cellSignalStrengthLte = cellInfoLte.getCellSignalStrength();
                         strength_4g = String.valueOf(cellSignalStrengthLte.getAsuLevel());
+                        saveToDatabase("4G", Integer.valueOf(strength_4g));
                     }
                     Log.i("Signal Strength", "2g=" + strength_2g + "  3g=" + strength_3g
                                 + "  4g=" + strength_4g);
@@ -202,6 +227,19 @@ public class TrackerService extends Service {
         }
     }
 
+
+    private void saveToDatabase(String signalType, Integer signalValue) {
+        // Saves an entry to the READINGS database table
+        if (lastLocation != null) {
+            ContentValues readingsValues = new ContentValues();
+            readingsValues.put("latitude", lastLocation.getLatitude());
+            readingsValues.put("longitude", lastLocation.getLongitude());
+            readingsValues.put("signal_type", signalType);
+            readingsValues.put("signal_value", signalValue);
+            readingsValues.put("uploaded", 0);
+            db.insert("READINGS", null, readingsValues);
+        }
+    }
 
 
     private void stopService() {
