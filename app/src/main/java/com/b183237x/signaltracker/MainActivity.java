@@ -21,7 +21,7 @@ import java.util.ArrayList;
 
 public class MainActivity extends AppCompatActivity {
 
-    // Permissions defintions
+    // Permissions definitions
     private int REQUEST_CODE_FINE_LOCATION = 101;
     private int REQUEST_CODE_BACKGROUND_LOCATION = 102;
     private Boolean permissionFineLocation = false;
@@ -45,8 +45,9 @@ public class MainActivity extends AppCompatActivity {
 
         btnCheckPermissions = findViewById(R.id.buttonCheckPermissions);
         btnStartService = findViewById(R.id.buttonStartService);
-        btnStartService.setEnabled(false);
         btnStopService = findViewById(R.id.buttonStopService);
+        btnStartService.setEnabled(false);
+        btnStopService.setEnabled(false);
 
 
         btnCheckPermissions.setOnClickListener(new View.OnClickListener() {
@@ -63,7 +64,8 @@ public class MainActivity extends AppCompatActivity {
             public void onClick(View v) {
                 // Start the TrackerService
                 actionOnService(Actions.START);
-
+                btnStartService.setEnabled(false);
+                btnStopService.setEnabled(true);
             }
         });
 
@@ -73,6 +75,8 @@ public class MainActivity extends AppCompatActivity {
             public void onClick(View v) {
                 // Stop the TrackerService
                 actionOnService(Actions.STOP);
+                btnStartService.setEnabled(true);
+                btnStopService.setEnabled(false);
             }
         });
     }

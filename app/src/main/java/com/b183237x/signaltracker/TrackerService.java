@@ -21,6 +21,8 @@ import android.content.Context;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.core.app.NotificationCompat;
+
+import java.text.SimpleDateFormat;
 import java.util.Calendar;
 import java.util.List;
 import android.os.Bundle;
@@ -58,7 +60,7 @@ public class TrackerService extends Service {
     public void onCreate() {
         super.onCreate();
 
-        // Get a handle to the SQL db
+        // Get a handle to the SQLite db
         signalTrackerDatabaseHelper = new SignalTrackerDatabaseHelper(this);
         try {
             db = signalTrackerDatabaseHelper.getWritableDatabase();
@@ -74,8 +76,9 @@ public class TrackerService extends Service {
             @Override
             public void onLocationChanged(@NonNull Location location) {
                 lastLocation = location;
-                Log.i("Latitude", Double.toString(lastLocation.getLatitude()));
-                Log.i("Longitude", Double.toString(lastLocation.getLongitude()));
+                // When the location changes, we want to record the signal strength
+                // at the new location
+                recordSignalStrength();
             }
 
             @Override
@@ -148,20 +151,27 @@ public class TrackerService extends Service {
         locationListener = null;
         locationManager = null;
 
+        // Close down database handle
         db.close();
+        db = null;
     }
 
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-
+        // Startup the service
         if (intent != null) {
             String action = intent.getAction();
-            if (action.equals(Actions.START.name())) { startService(); }
-            if (action.equals(Actions.STOP.name())) { stopService(); }
+            if (action.equals(Actions.START.name())) {
+                startService();
+            }
+            if (action.equals(Actions.STOP.name())) {
+                stopService();
+            }
         }
         return START_STICKY;
     }
+
 
     private void startService() {
         if (isServiceStarted) {
@@ -176,28 +186,13 @@ public class TrackerService extends Service {
         wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK,
                 "TrackerService::lock");
         wakeLock.acquire();
-
-        // Register a handler for every 5 minutes, then do an initial call to the runner
-        // This will then place another call to same runner for next interval (perpetual loop)
-        Handler handler = new Handler();
-        final Runnable runner = new Runnable() {
-            @Override
-            public void run() {
-                Log.i("Logger", "Logged at:" + Calendar.getInstance().getTime());
-                getSignalStrength();
-                handler.postDelayed(this, 2000);
-            }
-        };
-        handler.postDelayed(runner, 2000);
     }
 
-    private void getSignalStrength() {
+    private void recordSignalStrength() {
         // Function uses TelephonyManager to get the current network type (2g, 3g, 4g) and the
         // relative signal strength to the Cell tower that we are currently connected to.
         // NOTE: Can only ever be connected to a single cell tower and single gen of network
-        String strength_2g = "";
-        String strength_3g = "";
-        String strength_4g = "";
+        // Once value is retrieved it is saved to the local database
 
         TelephonyManager telephonyManager = (TelephonyManager) getSystemService(TELEPHONY_SERVICE);
         @SuppressLint("MissingPermission") List<CellInfo> cellInfoList = telephonyManager.getAllCellInfo();
@@ -207,21 +202,18 @@ public class TrackerService extends Service {
                     if (cellInfo instanceof CellInfoGsm) {
                         CellInfoGsm cellInfoGsm = (CellInfoGsm) cellInfo;
                         CellSignalStrengthGsm cellSignalStrengthGsm = cellInfoGsm.getCellSignalStrength();
-                        strength_2g = String.valueOf(cellSignalStrengthGsm.getAsuLevel());
+                        saveToDatabase("2G", cellSignalStrengthGsm.getAsuLevel());
                     }
                     if (cellInfo instanceof CellInfoWcdma) {
                         CellInfoWcdma cellInfoWcdma = (CellInfoWcdma) cellInfo;
                         CellSignalStrengthWcdma cellSignalStrengthWcdma = cellInfoWcdma.getCellSignalStrength();
-                        strength_3g = String.valueOf(cellSignalStrengthWcdma.getAsuLevel());
+                        saveToDatabase("3G", cellSignalStrengthWcdma.getAsuLevel());
                     }
                     if (cellInfo instanceof CellInfoLte) {
                         CellInfoLte cellInfoLte = (CellInfoLte) cellInfo;
                         CellSignalStrengthLte cellSignalStrengthLte = cellInfoLte.getCellSignalStrength();
-                        strength_4g = String.valueOf(cellSignalStrengthLte.getAsuLevel());
-                        saveToDatabase("4G", Integer.valueOf(strength_4g));
+                        saveToDatabase("4G", cellSignalStrengthLte.getAsuLevel());
                     }
-                    Log.i("Signal Strength", "2g=" + strength_2g + "  3g=" + strength_3g
-                                + "  4g=" + strength_4g);
                 }
             }
         }
@@ -229,14 +221,21 @@ public class TrackerService extends Service {
 
 
     private void saveToDatabase(String signalType, Integer signalValue) {
-        // Saves an entry to the READINGS database table
+        // Saves an entry to the READINGS database table and logs it
         if (lastLocation != null) {
+            Double latitude =  lastLocation.getLatitude();
+            Double longitude = lastLocation.getLongitude();
             ContentValues readingsValues = new ContentValues();
-            readingsValues.put("latitude", lastLocation.getLatitude());
-            readingsValues.put("longitude", lastLocation.getLongitude());
+            readingsValues.put("latitude", latitude);
+            readingsValues.put("longitude", longitude);
             readingsValues.put("signal_type", signalType);
             readingsValues.put("signal_value", signalValue);
             readingsValues.put("uploaded", 0);
+            Log.i("SignalTracker", "Saving reading to database:");
+            Log.i("SignalTracker", "Latitude=" + String.valueOf(latitude) +
+                                ", Longitude=" + String.valueOf(longitude) +
+                                ", Signal type=" + signalType +
+                                ", Signal value=" + String.valueOf(signalValue));
             db.insert("READINGS", null, readingsValues);
         }
     }
