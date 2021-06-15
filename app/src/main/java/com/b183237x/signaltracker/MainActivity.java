@@ -1,22 +1,28 @@
 package com.b183237x.signaltracker;
 
-import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 
 import android.Manifest;
-import android.app.Activity;
+import android.content.ComponentName;
 import android.content.Context;
-import android.content.DialogInterface;
+import android.content.ServiceConnection;
 import android.os.Bundle;
 import android.os.Build;
 import android.content.Intent;
+import android.os.IBinder;
 import android.util.Log;
 import android.view.View;
 import android.widget.Button;
 import android.content.pm.PackageManager;
+import android.widget.TextView;
 import android.widget.Toast;
-import java.util.ArrayList;
+
+import java.util.List;
+
+import retrofit2.Call;
+import retrofit2.Callback;
+import retrofit2.Response;
 
 
 public class MainActivity extends AppCompatActivity {
@@ -27,28 +33,76 @@ public class MainActivity extends AppCompatActivity {
     private Boolean permissionFineLocation = false;
     private Boolean permissionBackgroundLocation = false;
 
+    // A reference to the service used to get location updates.
+    private TrackerService trackerService = null;
+
     Button btnCheckPermissions;
     Button btnStartService;
     Button btnStopService;
+    TextView tvServiceState;
+
+    private boolean bound = false;
 
 
-    @Override
-    protected void onStart() {
-        super.onStart();
-        checkLocationFinePermission();
-    }
+
+    private final ServiceConnection serviceConnection = new ServiceConnection() {
+        @Override
+        public void onServiceConnected(ComponentName componentName, IBinder binder) {
+            TrackerService.TrackerServiceBinder trackerServiceBinder =
+                    (TrackerService.TrackerServiceBinder) binder;
+            trackerService = trackerServiceBinder.getTrackerService();
+            bound = true;
+        }
+
+        @Override
+        public void onServiceDisconnected(ComponentName componentName) {
+            trackerService = null;
+            bound = false;
+        }
+    };
+
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+    }
+
+
+    @Override
+    protected void onStart() {
+        super.onStart();
+
+        ////////////////// FOR TESTING API - REMOVE WHEN DONE ////////////////
+        /*
+        RestApiInterface apiService = RestApiClient.getClient(this, "boss@boss.com", "RAN01gers")
+                .create(RestApiInterface.class);
+        Call<User> call = apiService.getUserByEmail("boss@boss.com");
+        call.enqueue(new Callback<User>() {
+             @Override
+             public void onResponse(Call<User> call, Response<User> response) {
+                 if (response.isSuccessful()) {
+                     User user = response.body();
+                     Log.d("SignalTracker", "Response = " + user.getUserId());
+                 } else {
+                     Log.d("SignalTracker", response.errorBody().toString());
+                 }
+             }
+
+             @Override
+             public void onFailure(Call<User> call, Throwable t) {
+                 t.printStackTrace();
+             }
+         });
+
+         */
+        ////////////////// FOR TESTING API - REMOVE WHEN DONE ////////////////
+
 
         btnCheckPermissions = findViewById(R.id.buttonCheckPermissions);
         btnStartService = findViewById(R.id.buttonStartService);
         btnStopService = findViewById(R.id.buttonStopService);
-        btnStartService.setEnabled(false);
-        btnStopService.setEnabled(false);
-
+        tvServiceState = findViewById(R.id.tvServiceState);
 
         btnCheckPermissions.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -63,9 +117,10 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onClick(View v) {
                 // Start the TrackerService
-                actionOnService(Actions.START);
+                trackerService.enableSignalUpdates();
                 btnStartService.setEnabled(false);
                 btnStopService.setEnabled(true);
+                tvServiceState.setText(String.valueOf(ServiceState.getServiceState(getApplicationContext())));
             }
         });
 
@@ -74,26 +129,45 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onClick(View v) {
                 // Stop the TrackerService
-                actionOnService(Actions.STOP);
+                trackerService.disableSignalUpdates();
                 btnStartService.setEnabled(true);
                 btnStopService.setEnabled(false);
+                tvServiceState.setText(String.valueOf(ServiceState.getServiceState(getApplicationContext())));
             }
         });
+
+        checkLocationFinePermission();
+
+        // Bind to the service. If the service is in foreground mode, this signals to the service
+        // that since this activity is in the foreground, the service can exit foreground mode.
+        bindService(new Intent(this, TrackerService.class), serviceConnection,
+                Context.BIND_AUTO_CREATE);
+
+
+        // TODO: FIX THIS AS METHOD COULD FINISH B4 BIND IS UPDATED
+        if (ServiceState.getServiceState(this) == ServiceState.STARTED) {
+            btnStartService.setEnabled(false);
+            btnStopService.setEnabled(true);
+        }
+        if (ServiceState.getServiceState(this) == ServiceState.STOPPED) {
+            btnStartService.setEnabled(true);
+            btnStopService.setEnabled(false);
+        }
     }
 
 
-    private void actionOnService(Actions action) {
-        if (ServiceState.getServiceState(this) == ServiceState.STOPPED && action == Actions.STOP) {
-            return;
+    @Override
+    protected void onStop() {
+        // Unbind from the service. This signals to the service that this activity is no longer
+        // in the foreground, and the service can respond by promoting itself to a foreground
+        // service.
+        if (bound) {
+            unbindService(serviceConnection);
+            bound = false;
         }
-        Intent serviceIntent = new Intent(this, TrackerService.class);
-        serviceIntent.setAction(action.toString());
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            startForegroundService(serviceIntent);
-        } else {
-            startService(serviceIntent);
-        }
+        super.onStop();
     }
+
 
 
     protected void checkLocationFinePermission() {
