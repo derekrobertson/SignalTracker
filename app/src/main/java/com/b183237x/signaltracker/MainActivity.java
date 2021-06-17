@@ -94,8 +94,8 @@ public class MainActivity extends AppCompatActivity {
                  t.printStackTrace();
              }
          });
+        */
 
-         */
         ////////////////// FOR TESTING API - REMOVE WHEN DONE ////////////////
 
 
