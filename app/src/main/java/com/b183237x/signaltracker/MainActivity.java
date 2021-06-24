@@ -18,6 +18,8 @@ import android.content.pm.PackageManager;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import java.io.IOException;
+import java.security.GeneralSecurityException;
 import java.util.List;
 
 import retrofit2.Call;
@@ -72,32 +74,6 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onStart() {
         super.onStart();
-
-        ////////////////// FOR TESTING API - REMOVE WHEN DONE ////////////////
-        /*
-        RestApiInterface apiService = RestApiClient.getClient(this, "boss@boss.com", "RAN01gers")
-                .create(RestApiInterface.class);
-        Call<User> call = apiService.getUserByEmail("boss@boss.com");
-        call.enqueue(new Callback<User>() {
-             @Override
-             public void onResponse(Call<User> call, Response<User> response) {
-                 if (response.isSuccessful()) {
-                     User user = response.body();
-                     Log.d("SignalTracker", "Response = " + user.getUserId());
-                 } else {
-                     Log.d("SignalTracker", response.errorBody().toString());
-                 }
-             }
-
-             @Override
-             public void onFailure(Call<User> call, Throwable t) {
-                 t.printStackTrace();
-             }
-         });
-        */
-
-        ////////////////// FOR TESTING API - REMOVE WHEN DONE ////////////////
-
 
         btnCheckPermissions = findViewById(R.id.buttonCheckPermissions);
         btnStartService = findViewById(R.id.buttonStartService);

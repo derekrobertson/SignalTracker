@@ -1,4 +1,4 @@
-package com.b183237x.signaltracker;
+package com.b183237x.signaltracker.pojomodels;
 
 import com.google.gson.annotations.SerializedName;
 

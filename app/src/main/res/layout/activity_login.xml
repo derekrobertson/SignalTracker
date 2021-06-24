@@ -9,6 +9,7 @@
     android:gravity="center"
     tools:context="com.b183237x.signaltracker.LoginActivity">
 
+
     <TextView
         android:id="@+id/ErrorMessage"
         android:layout_width="wrap_content"
@@ -31,6 +32,7 @@
 
 
     <EditText
+        android:inputType="textPassword"
         android:id="@+id/Password"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
