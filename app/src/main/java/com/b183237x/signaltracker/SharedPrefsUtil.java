@@ -14,25 +14,37 @@ public class SharedPrefsUtil {
     private static SharedPreferences sharedPreferences;
 
 
-    private static SharedPreferences getSharedPrefs(Context context) throws GeneralSecurityException, IOException {
+    private static SharedPreferences getSharedPrefs(Context context) {
 
         String masterKeyAlias = "";
 
-        masterKeyAlias = MasterKeys.getOrCreate(MasterKeys.AES256_GCM_SPEC);
+        try {
+            masterKeyAlias = MasterKeys.getOrCreate(MasterKeys.AES256_GCM_SPEC);
+        } catch (GeneralSecurityException e) {
+            e.printStackTrace();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
 
-        sharedPreferences = EncryptedSharedPreferences.create(
-                "SignalTrackerPrefs",
-                masterKeyAlias,
-                context,
-                EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-                EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
-        );
+        try {
+            sharedPreferences = EncryptedSharedPreferences.create(
+                    "SignalTrackerPrefs",
+                    masterKeyAlias,
+                    context,
+                    EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+                    EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+            );
+        } catch (GeneralSecurityException e) {
+            e.printStackTrace();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
 
         return sharedPreferences;
     }
 
 
-    public static String getPrefVal(Context context, String key) throws GeneralSecurityException, IOException {
+    public static String getPrefVal(Context context, String key) {
         SharedPreferences sharedPreferences = getSharedPrefs(context);
         String value = "";
         if (sharedPreferences.contains(key)) {
@@ -42,12 +54,11 @@ public class SharedPrefsUtil {
     }
 
 
-    public static void setPrefVal(Context context, String key, String value) throws GeneralSecurityException, IOException {
+    public static void setPrefVal(Context context, String key, String value) {
         SharedPreferences.Editor editor = getSharedPrefs(context).edit();
         editor.putString(key, value);
         editor.commit();
     }
-
 
 
 }

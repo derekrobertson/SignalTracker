@@ -5,6 +5,7 @@ import androidx.appcompat.app.AppCompatActivity;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.View;
+import android.widget.Button;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -22,6 +23,7 @@ public class RegisterActivity extends AppCompatActivity {
     TextView tvEmail;
     TextView tvPassword;
     TextView tvPasswordConfirm;
+    Button btnCreateAccount;
 
 
     @Override
@@ -34,12 +36,14 @@ public class RegisterActivity extends AppCompatActivity {
     protected void onStart() {
         super.onStart();
 
+        // Grab refs to the form fields
         tvErrorMsg = findViewById((R.id.ErrorMessage));
         tvFirstName = findViewById(R.id.FirstName);
         tvLastName = findViewById(R.id.LastName);
         tvEmail = findViewById(R.id.Email);
         tvPassword = findViewById(R.id.Password);
         tvPasswordConfirm = findViewById(R.id.PasswordConfirm);
+        btnCreateAccount = findViewById(R.id.btnCreateAccount);
     }
 
     // Call onCreateAccountClicked() when the button is clicked
@@ -79,10 +83,8 @@ public class RegisterActivity extends AppCompatActivity {
         // If we get here, form is validated
         tvErrorMsg.setVisibility(View.INVISIBLE);
         createAccount(firstName, lastName, email, password);
-
-
-
     }
+
 
     // Display an error for the user
     private void displayError(String message) {
@@ -93,8 +95,11 @@ public class RegisterActivity extends AppCompatActivity {
     }
 
 
-
     private void createAccount(String firstName, String lastName, String email, String password) {
+
+        btnCreateAccount.setEnabled(false);
+        // We create a REST API client, using the API key only, which is allowed to register
+        // new accounts.
         RestApiInterface apiService = RestApiClient.getApiKeyClient(this)
                 .create(RestApiInterface.class);
         Call<User> call = apiService.createUser(new User(firstName, lastName, email, password, "USER"));
@@ -102,27 +107,33 @@ public class RegisterActivity extends AppCompatActivity {
             @Override
             public void onResponse(Call<User> call, Response<User> response) {
                 if (response.isSuccessful()) {
+                    // Close this activity and fallback to LoginActivity
                     Toast.makeText(getApplicationContext(), "User account created, now login",
                             Toast.LENGTH_LONG).show();
                     finish();
                 } else {
-                    Toast.makeText(getApplicationContext(), "Could not create user account",
-                            Toast.LENGTH_LONG).show();
+                    if (response.code() == 409) {
+                        // User already exists
+                        Toast.makeText(getApplicationContext(), "User account already exists",
+                                Toast.LENGTH_LONG).show();
+                    } else {
+                        Toast.makeText(getApplicationContext(), "Could not create user account",
+                                Toast.LENGTH_LONG).show();
+                    }
+                    btnCreateAccount.setEnabled(true);
                     Log.d("SignalTracker", response.errorBody().toString());
                 }
             }
 
             @Override
             public void onFailure(Call<User> call, Throwable t) {
+                btnCreateAccount.setEnabled(true);
+                displayError("Error making call to remote API");
                 t.printStackTrace();
             }
         });
 
     }
-
-
-
-
 
     public void onBackToLoginClicked(View view) {
         // Finish this activity and go back to login screen

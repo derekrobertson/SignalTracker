@@ -27,12 +27,22 @@ import androidx.core.app.NotificationCompat;
 import java.text.SimpleDateFormat;
 import java.util.Calendar;
 import java.util.List;
+import java.util.UUID;
+
 import android.os.Bundle;
 import android.location.LocationListener;
 import android.location.LocationManager;
 import android.location.Criteria;
 import android.telephony.TelephonyManager;
 import android.widget.Toast;
+
+import com.b183237x.signaltracker.pojomodels.Celltower;
+import com.b183237x.signaltracker.pojomodels.Device;
+import com.b183237x.signaltracker.pojomodels.Reading;
+
+import retrofit2.Call;
+import retrofit2.Callback;
+import retrofit2.Response;
 
 
 public class TrackerService extends Service {
@@ -157,7 +167,7 @@ public class TrackerService extends Service {
         String provider = locationManager.getBestProvider(new Criteria(), true);
         if (provider != null) {
             try {
-                locationManager.requestLocationUpdates(provider, 30000, 5,
+                locationManager.requestLocationUpdates(provider, 10000, 1,
                         locationListener);
             } catch (SecurityException e) {
                 // permission not enabled!
@@ -245,21 +255,126 @@ public class TrackerService extends Service {
                 if (cellInfo.isRegistered()) {
                     if (cellInfo instanceof CellInfoGsm) {
                         CellInfoGsm cellInfoGsm = (CellInfoGsm) cellInfo;
+                        CellIdentityGsm cellIdentityGsm = cellInfoGsm.getCellIdentity();
                         CellSignalStrengthGsm cellSignalStrengthGsm = cellInfoGsm.getCellSignalStrength();
-                        saveToDatabase("2G", cellSignalStrengthGsm.getAsuLevel());
+                        recordReading(cellIdentityGsm.getCid(),
+                                cellIdentityGsm.getLac(),
+                                cellIdentityGsm.getMcc(),
+                                cellIdentityGsm.getMnc(),
+                                "2G",
+                                cellSignalStrengthGsm.getAsuLevel());
                     }
                     if (cellInfo instanceof CellInfoWcdma) {
                         CellInfoWcdma cellInfoWcdma = (CellInfoWcdma) cellInfo;
+                        CellIdentityWcdma cellIdentityWcdma = cellInfoWcdma.getCellIdentity();
                         CellSignalStrengthWcdma cellSignalStrengthWcdma = cellInfoWcdma.getCellSignalStrength();
-                        saveToDatabase("3G", cellSignalStrengthWcdma.getAsuLevel());
+                        recordReading(cellIdentityWcdma.getCid(),
+                                cellIdentityWcdma.getLac(),
+                                cellIdentityWcdma.getMcc(),
+                                cellIdentityWcdma.getMnc(),
+                                "3G",
+                                cellSignalStrengthWcdma.getAsuLevel());
                     }
                     if (cellInfo instanceof CellInfoLte) {
                         CellInfoLte cellInfoLte = (CellInfoLte) cellInfo;
+                        CellIdentityLte cellIdentityLte = cellInfoLte.getCellIdentity();
                         CellSignalStrengthLte cellSignalStrengthLte = cellInfoLte.getCellSignalStrength();
-                        saveToDatabase("4G", cellSignalStrengthLte.getAsuLevel());
+                        recordReading(cellIdentityLte.getCi(),
+                                cellIdentityLte.getTac(),
+                                cellIdentityLte.getMcc(),
+                                cellIdentityLte.getMnc(),
+                                "4G",
+                                cellSignalStrengthLte.getAsuLevel());
+
                     }
                 }
             }
+        }
+    }
+
+
+    private void recordReading(int celltowerName, int locationAreaCode,
+                                 int mobileCountryCode, int mobileNetworkCode, String signalType,
+                                    int signalValue) {
+
+        if (lastLocation != null) {
+            // Get the last known location
+            Double latitude =  lastLocation.getLatitude();
+            Double longitude = lastLocation.getLongitude();
+
+            Context context = getApplicationContext();
+
+            // Register the celltower in the api
+            RestApiInterface apiService = RestApiClient.getAuthClient(context,
+                    AppProperties.getInstance().getEmail(),
+                    AppProperties.getInstance().getPassword())
+                    .create(RestApiInterface.class);
+
+            // NOTE: REST API expects latitude and longitude (of the celltower) but these are just set to zero
+            // as info is no longer publicly available
+            Celltower thisCelltower = new Celltower(String.valueOf(celltowerName),
+                    String.valueOf(locationAreaCode),
+                    String.valueOf(mobileCountryCode),
+                    String.valueOf(mobileNetworkCode),
+                    "0",
+                    "0");
+
+            Call<Celltower> call = apiService.createCelltower(thisCelltower);
+
+            call.enqueue(new Callback<Celltower>() {
+                @Override
+                public void onResponse(Call<Celltower> call, Response<Celltower> response) {
+                    Celltower celltower = null;
+                    if (response.isSuccessful()) {
+                        celltower = response.body();
+                    } else {
+                        if (response.code() == 409) {
+                            // Celltower already exists but will be returned
+                            celltower = response.body();
+                        } else {
+                            Log.d("SignalTracker", response.errorBody().toString());
+                        }
+                    }
+
+                    // If we got a valid celltower created or returned
+                    // We can go ahead to record the reading itself
+                    if (celltower != null) {
+                        Reading thisReading = new Reading(
+                                AppProperties.getInstance().getDeviceId(),
+                                celltower.getCelltowerId(),
+                                String.valueOf(latitude),
+                                String.valueOf(longitude),
+                                signalType,
+                                String.valueOf(signalValue));
+
+                        Call<Reading> readingCall = apiService.createReading(thisReading);
+
+                        readingCall.enqueue(new Callback<Reading>() {
+                            @Override
+                            public void onResponse(Call<Reading> call, Response<Reading> response) {
+                                if (response.isSuccessful()) {
+                                    Reading reading = response.body();
+                                } else {
+                                    Log.d("SignalTracker", response.errorBody().toString());
+                                }
+                            }
+
+                            @Override
+                            public void onFailure(Call<Reading> call, Throwable t) {
+                                t.printStackTrace();
+                            }
+                        });
+                    } else {
+                        // celltower is null
+                        Log.d("SignalTracker", "Celltower not returned, could not record reading");
+                    }
+                }
+
+                @Override
+                public void onFailure(Call<Celltower> call, Throwable t) {
+                    t.printStackTrace();
+                }
+            });
         }
     }
 

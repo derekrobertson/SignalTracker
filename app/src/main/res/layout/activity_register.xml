@@ -69,7 +69,7 @@
         android:ems="8"/>
 
     <Button
-        android:id="@+id/CreateAccount"
+        android:id="@+id/btnCreateAccount"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_marginTop="20dp"
@@ -85,7 +85,7 @@
         android:text="OR"/>
 
     <Button
-        android:id="@+id/BackToLogin"
+        android:id="@+id/btnBackToLogin"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_marginTop="600dp"

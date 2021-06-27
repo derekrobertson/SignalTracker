@@ -18,9 +18,12 @@ import android.content.pm.PackageManager;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import com.b183237x.signaltracker.pojomodels.Device;
+
 import java.io.IOException;
 import java.security.GeneralSecurityException;
 import java.util.List;
+import java.util.UUID;
 
 import retrofit2.Call;
 import retrofit2.Callback;
@@ -38,13 +41,13 @@ public class MainActivity extends AppCompatActivity {
     // A reference to the service used to get location updates.
     private TrackerService trackerService = null;
 
+    TextView tvErrorMsg;
     Button btnCheckPermissions;
     Button btnStartService;
     Button btnStopService;
     TextView tvServiceState;
 
     private boolean bound = false;
-
 
 
     private final ServiceConnection serviceConnection = new ServiceConnection() {
@@ -75,10 +78,63 @@ public class MainActivity extends AppCompatActivity {
     protected void onStart() {
         super.onStart();
 
-        btnCheckPermissions = findViewById(R.id.buttonCheckPermissions);
-        btnStartService = findViewById(R.id.buttonStartService);
-        btnStopService = findViewById(R.id.buttonStopService);
+        // Get refs to the form fields and buttons
+        tvErrorMsg = findViewById(R.id.tvErrorMsg);
+        btnCheckPermissions = findViewById(R.id.btnCheckPermissions);
+        btnStartService = findViewById(R.id.btnStartService);
+        btnStopService = findViewById(R.id.btnStopService);
         tvServiceState = findViewById(R.id.tvServiceState);
+
+        // Generate a unique app instance ID and save it in the shared creds if not already there
+        // This allows us to track the device that the app is running on if a user uses the app
+        // on multiple devices
+        Context context = getApplicationContext();
+        String uniqueId = "";
+        uniqueId = SharedPrefsUtil.getPrefVal(this, "uuid");
+
+        // If the uniqueid already exists in our encrypted sharedprefs, we will use it, otherwise
+        // we will call the REST API to create this device
+        if (!uniqueId.equals("")) {
+            AppProperties.getInstance().setUuid(uniqueId);
+        } else {
+            uniqueId = UUID.randomUUID().toString();
+            AppProperties.getInstance().setUuid(uniqueId);
+            SharedPrefsUtil.setPrefVal(this, "uuid", uniqueId);
+        }
+
+        // Now call REST API to create this device if not already present
+        RestApiInterface apiService = RestApiClient.getAuthClient(getApplicationContext(),
+                        AppProperties.getInstance().getEmail(), AppProperties.getInstance().getPassword())
+                .create(RestApiInterface.class);
+        Call<Device> call = apiService.createDevice(new Device(AppProperties.getInstance().getUserId(),
+                Build.MANUFACTURER,
+                Build.MODEL,
+                uniqueId,
+                String.valueOf(Build.VERSION.SDK_INT)
+        ));
+
+
+        call.enqueue(new Callback<Device>() {
+            @Override
+            public void onResponse(Call<Device> call, Response<Device> response) {
+                if (response.isSuccessful()) {
+                    Device device = response.body();
+                    SharedPrefsUtil.setPrefVal(context, "device_id", device.getDeviceId());
+                    AppProperties.getInstance().setDeviceId(device.getDeviceId());
+                } else {
+                    displayError("Unable to register this device");
+                    Log.d("SignalTracker", response.errorBody().toString());
+                }
+            }
+
+            @Override
+            public void onFailure(Call<Device> call, Throwable t) {
+                displayError("Error making call to remote API");
+                t.printStackTrace();
+                finish();
+            }
+        });
+
 
         btnCheckPermissions.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -131,6 +187,14 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+
+    // Display an error for the user
+    private void displayError(String message) {
+        if (tvErrorMsg.getVisibility() == View.INVISIBLE) {
+            tvErrorMsg.setVisibility(View.VISIBLE);
+        }
+        tvErrorMsg.setText(message);
+    }
 
     @Override
     protected void onStop() {
