@@ -89,8 +89,7 @@ public class MainActivity extends AppCompatActivity {
         // This allows us to track the device that the app is running on if a user uses the app
         // on multiple devices
         Context context = getApplicationContext();
-        String uniqueId = "";
-        uniqueId = SharedPrefsUtil.getPrefVal(this, "uuid");
+        String uniqueId = SharedPrefsUtil.getPrefVal(this, "uuid");
 
         // If the uniqueid already exists in our encrypted sharedprefs, we will use it, otherwise
         // we will call the REST API to create this device
@@ -103,38 +102,39 @@ public class MainActivity extends AppCompatActivity {
         }
 
         // Now call REST API to create this device if not already present
-        RestApiInterface apiService = RestApiClient.getAuthClient(getApplicationContext(),
-                        AppProperties.getInstance().getEmail(), AppProperties.getInstance().getPassword())
-                .create(RestApiInterface.class);
-        Call<Device> call = apiService.createDevice(new Device(AppProperties.getInstance().getUserId(),
-                Build.MANUFACTURER,
-                Build.MODEL,
-                uniqueId,
-                String.valueOf(Build.VERSION.SDK_INT)
-        ));
+        if (AppProperties.getInstance().getDeviceId() == null) {
+            RestApiInterface apiService = RestApiClient.getAuthClient(getApplicationContext(),
+                    AppProperties.getInstance().getEmail(), AppProperties.getInstance().getPassword())
+                    .create(RestApiInterface.class);
+            Call<Device> call = apiService.createDevice(new Device(AppProperties.getInstance().getUserId(),
+                    Build.MANUFACTURER,
+                    Build.MODEL,
+                    uniqueId,
+                    String.valueOf(Build.VERSION.SDK_INT)
+            ));
 
 
-        call.enqueue(new Callback<Device>() {
-            @Override
-            public void onResponse(Call<Device> call, Response<Device> response) {
-                if (response.isSuccessful()) {
-                    Device device = response.body();
-                    SharedPrefsUtil.setPrefVal(context, "device_id", device.getDeviceId());
-                    AppProperties.getInstance().setDeviceId(device.getDeviceId());
-                } else {
-                    displayError("Unable to register this device");
-                    Log.d("SignalTracker", response.errorBody().toString());
+            call.enqueue(new Callback<Device>() {
+                @Override
+                public void onResponse(Call<Device> call, Response<Device> response) {
+                    if (response.isSuccessful()) {
+                        Device device = response.body();
+                        SharedPrefsUtil.setPrefVal(context, "device_id", device.getDeviceId());
+                        AppProperties.getInstance().setDeviceId(device.getDeviceId());
+                    } else {
+                        displayError("Unable to register this device");
+                        Log.d("SignalTracker", response.errorBody().toString());
+                    }
                 }
-            }
 
-            @Override
-            public void onFailure(Call<Device> call, Throwable t) {
-                displayError("Error making call to remote API");
-                t.printStackTrace();
-                finish();
-            }
-        });
-
+                @Override
+                public void onFailure(Call<Device> call, Throwable t) {
+                    displayError("Error making call to remote API");
+                    t.printStackTrace();
+                    finish();
+                }
+            });
+        }
 
         btnCheckPermissions.setOnClickListener(new View.OnClickListener() {
             @Override

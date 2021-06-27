@@ -62,10 +62,6 @@ public class TrackerService extends Service {
     private LocationManager locationManager;
     private static Location lastLocation = null;
 
-    private SignalTrackerDatabaseHelper signalTrackerDatabaseHelper;
-    private SQLiteDatabase db;
-
-
     private final IBinder binder = new TrackerServiceBinder();
     public class TrackerServiceBinder extends Binder {
         TrackerService getTrackerService() {
@@ -77,18 +73,6 @@ public class TrackerService extends Service {
     @Override
     public void onCreate() {
         super.onCreate();
-
-        // Get a handle to the SQLite db
-        signalTrackerDatabaseHelper = new SignalTrackerDatabaseHelper(this);
-        try {
-            db = signalTrackerDatabaseHelper.getWritableDatabase();
-        } catch (SQLiteException e) {
-            Toast toast = Toast.makeText(this, "Unable to access database",
-                    Toast.LENGTH_SHORT);
-            toast.show();
-            return;
-        }
-
 
         notificationManager = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
         // Create a notification channel for the foreground service (only if Android Oreo+)
@@ -167,7 +151,7 @@ public class TrackerService extends Service {
         String provider = locationManager.getBestProvider(new Criteria(), true);
         if (provider != null) {
             try {
-                locationManager.requestLocationUpdates(provider, 10000, 1,
+                locationManager.requestLocationUpdates(provider, 30000, 5,
                         locationListener);
             } catch (SecurityException e) {
                 // permission not enabled!
@@ -232,9 +216,6 @@ public class TrackerService extends Service {
         // Destroy the location listener
         locationListener = null;
         locationManager = null;
-        // Close down database handle
-        db.close();
-        db = null;
         // If the app is just killed, ensure we record that the service is stopped
         ServiceState.setServiceState(this, ServiceState.STOPPED);
 
@@ -319,6 +300,12 @@ public class TrackerService extends Service {
                     "0",
                     "0");
 
+            Log.d("SignalTracker", "Attempting to register celltower: " +
+                    "NameID=" + String.valueOf(celltowerName) + ", " +
+                    "LocationAreaCode=" + String.valueOf(locationAreaCode) + ", " +
+                    "MobileCountryCode=" + String.valueOf(mobileCountryCode) + ", " +
+                    "MobileNetworkCode=" + String.valueOf(mobileNetworkCode));
+
             Call<Celltower> call = apiService.createCelltower(thisCelltower);
 
             call.enqueue(new Callback<Celltower>() {
@@ -327,13 +314,9 @@ public class TrackerService extends Service {
                     Celltower celltower = null;
                     if (response.isSuccessful()) {
                         celltower = response.body();
+                        Log.d("SignalTracker", "Celltower registered successfully");
                     } else {
-                        if (response.code() == 409) {
-                            // Celltower already exists but will be returned
-                            celltower = response.body();
-                        } else {
-                            Log.d("SignalTracker", response.errorBody().toString());
-                        }
+                        Log.d("SignalTracker", response.errorBody().toString());
                     }
 
                     // If we got a valid celltower created or returned
@@ -347,6 +330,14 @@ public class TrackerService extends Service {
                                 signalType,
                                 String.valueOf(signalValue));
 
+                        Log.d("SignalTracker", "Attempting to register reading: " +
+                                "DeviceID=" + AppProperties.getInstance().getDeviceId() + ", " +
+                                "CelltowerID=" + celltower.getCelltowerId() + ", " +
+                                "Latitude=" + String.valueOf(latitude) + ", " +
+                                "Longitude=" + String.valueOf(longitude) + ", " +
+                                "SignalType=" + signalType + ", " +
+                                "SignalValue=" + String.valueOf(signalValue));
+
                         Call<Reading> readingCall = apiService.createReading(thisReading);
 
                         readingCall.enqueue(new Callback<Reading>() {
@@ -354,6 +345,7 @@ public class TrackerService extends Service {
                             public void onResponse(Call<Reading> call, Response<Reading> response) {
                                 if (response.isSuccessful()) {
                                     Reading reading = response.body();
+                                    Log.d("SignalTracker", "Reading registered successfully");
                                 } else {
                                     Log.d("SignalTracker", response.errorBody().toString());
                                 }
@@ -361,6 +353,7 @@ public class TrackerService extends Service {
 
                             @Override
                             public void onFailure(Call<Reading> call, Throwable t) {
+                                Log.d("SignalTracker", "Error making call to /readings remote API");
                                 t.printStackTrace();
                             }
                         });
@@ -372,30 +365,10 @@ public class TrackerService extends Service {
 
                 @Override
                 public void onFailure(Call<Celltower> call, Throwable t) {
+                    Log.d("SignalTracker", "Error making call to /celltowers remote API");
                     t.printStackTrace();
                 }
             });
-        }
-    }
-
-
-    private void saveToDatabase(String signalType, Integer signalValue) {
-        // Saves an entry to the READINGS database table and logs it
-        if (lastLocation != null) {
-            Double latitude =  lastLocation.getLatitude();
-            Double longitude = lastLocation.getLongitude();
-            ContentValues readingsValues = new ContentValues();
-            readingsValues.put("latitude", latitude);
-            readingsValues.put("longitude", longitude);
-            readingsValues.put("signal_type", signalType);
-            readingsValues.put("signal_value", signalValue);
-            readingsValues.put("uploaded", 0);
-            Log.i(TAG, "Saving reading to database:");
-            Log.i(TAG, "Latitude=" + String.valueOf(latitude) +
-                                ", Longitude=" + String.valueOf(longitude) +
-                                ", Signal type=" + signalType +
-                                ", Signal value=" + String.valueOf(signalValue));
-            db.insert("READINGS", null, readingsValues);
         }
     }
 

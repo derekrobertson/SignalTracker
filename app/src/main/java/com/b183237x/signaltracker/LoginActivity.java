@@ -111,6 +111,7 @@ public class LoginActivity extends AppCompatActivity {
             public void onFailure(Call<User> call, Throwable t) {
                 btnLogin.setEnabled(true);
                 displayError("Error making call to remote API");
+                Log.d("SignalTracker", "Error making call to /users remote API");
                 t.printStackTrace();
             }
         });

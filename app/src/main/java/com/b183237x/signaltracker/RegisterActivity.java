@@ -110,15 +110,18 @@ public class RegisterActivity extends AppCompatActivity {
                     // Close this activity and fallback to LoginActivity
                     Toast.makeText(getApplicationContext(), "User account created, now login",
                             Toast.LENGTH_LONG).show();
+                    Log.d("SignalTracker", "New user account successfully registered");
                     finish();
                 } else {
                     if (response.code() == 409) {
                         // User already exists
                         Toast.makeText(getApplicationContext(), "User account already exists",
                                 Toast.LENGTH_LONG).show();
+                        Log.d("SignalTracker", "User account for this email already exists");
                     } else {
                         Toast.makeText(getApplicationContext(), "Could not create user account",
                                 Toast.LENGTH_LONG).show();
+                        Log.d("SignalTracker", "Failure when registering new user account");
                     }
                     btnCreateAccount.setEnabled(true);
                     Log.d("SignalTracker", response.errorBody().toString());
@@ -129,6 +132,7 @@ public class RegisterActivity extends AppCompatActivity {
             public void onFailure(Call<User> call, Throwable t) {
                 btnCreateAccount.setEnabled(true);
                 displayError("Error making call to remote API");
+                Log.d("SignalTracker", "Error making call to /users remote API");
                 t.printStackTrace();
             }
         });

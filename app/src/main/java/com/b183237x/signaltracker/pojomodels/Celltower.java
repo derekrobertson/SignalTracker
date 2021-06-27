@@ -1,5 +1,7 @@
 package com.b183237x.signaltracker.pojomodels;
 
+import android.util.Log;
+
 import com.google.gson.annotations.SerializedName;
 
 public class Celltower {
